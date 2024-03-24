@@ -1,0 +1,73 @@
+---
+  kind: Service
+  apiVersion: v1
+  metadata:
+    name: half-plus-two
+    labels:
+      app: half-plus-two
+  spec:
+    ports:
+    - name: http-tf-serving
+      port: 8500
+      targetPort: 8500
+    - name: grpc-tf-serving
+      port: 9000
+      targetPort: 9000
+    selector:
+      app: half-plus-two
+      role: master
+    type: ClusterIP
+---
+  kind: Deployment
+  apiVersion: apps/v1
+  metadata:
+    name: half-plus-two
+    labels:
+      app: half-plus-two
+      role: master
+  spec:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: half-plus-two
+        role: master
+    template:
+      metadata:
+        labels:
+          app: half-plus-two
+          role: master
+      spec:
+        containers:
+        - name: half-plus-two
+          image: 763104351884.dkr.ecr.us-west-2.amazonaws.com/tensorflow-inference:2.14.1-gpu-py310-cu118-ubuntu20.04-ec2
+          resources:
+           limits:
+              cpu: 4
+              memory: 4Gi
+              nvidia.com/gpu: 1
+          command: ["/bin/sh"]
+          args: ["-c", "mkdir -p /tensorflow_model && aws s3 sync s3://kwt-us-west-2-ml-models/saved_model_half_plus_two_gpu/ /tensorflow_model/saved_model_half_plus_two_gpu/ && /usr/bin/tensorflow_model_server --port=9000 --rest_api_port=8500 --model_name=saved_model_half_plus_two_gpu --model_base_path=/tensorflow_model/saved_model_half_plus_two_gpu"]
+          ports:
+          - containerPort: 8500
+          - containerPort: 9000
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: AWS_ACCESS_KEY_ID
+            valueFrom:
+              secretKeyRef:
+                key: AWS_ACCESS_KEY_ID
+                name: aws-s3-secret
+          - name: AWS_SECRET_ACCESS_KEY
+            valueFrom:
+              secretKeyRef:
+                key: AWS_SECRET_ACCESS_KEY
+                name: aws-s3-secret
+          - name: AWS_REGION
+            value: us-west-2
+          - name: S3_USE_HTTPS
+            value: "true"
+          - name: S3_VERIFY_SSL
+            value: "true"
+          - name: S3_ENDPOINT
+            value: s3.us-west-2.amazonaws.com
+
